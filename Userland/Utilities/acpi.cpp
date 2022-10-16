@@ -23,6 +23,10 @@ struct [[gnu::packed]] SDTHeader {
     u32 creator_revision;
 };
 
+bool isLeadNameChar(u8 data);
+bool NamePath(Vector<u8>& data,u32 pos);
+void nameit(Vector<u8>& data,u32& pos);
+
 // https://uefi.org/sites/default/files/resources/ACPI_Spec_6_4_Jan22.pdf#page=1020
 static void pkg_length(AK::Detail::ByteBuffer<32> const& data, u32& next_in_block, u32& next_block)
 {
@@ -69,6 +73,68 @@ static void pkg_length(AK::Detail::ByteBuffer<32> const& data, u32& next_in_bloc
     next_block = next_block + delta + length;
 }
 
+bool isLeadNameChar(u8 data)
+{
+  return ((data >= 0x41 && data <= 0x5a) || (data==0x5f));
+}
+
+bool NamePath(Vector<u8>& data,u32 pos)
+{
+  const u8 DualNamePrefix=0x2e;
+  const u8 MultiNamePrefix=0x2f;
+  const u8 NullName=0x00;
+
+  if (data[pos]==DualNamePrefix) {
+    outln("DualNamePrefix");
+    out("  Name 1: ");
+    for(auto i=0;i<4;i++) out("{:c}",data.at(pos+1+i));
+    outln();
+    out("  Name 2: ");
+    for(auto i=4;i<8;i++) out("{:c}",data.at(pos+1+i));
+    outln();
+  } if (data[pos]==MultiNamePrefix) {
+    outln("MultiNamePrefix");
+    for (auto mnp=0; mnp<data[pos+1]; mnp++) {
+      out("  Name {:03d}: ",mnp);
+      for(auto i=0;i<4;i++) out("{:c}",data.at(pos+2+4*mnp+1));
+      outln();
+    }      
+  } if (data[pos]==NullName) {
+    outln("NullName");
+  } if (isLeadNameChar(data[pos])) {
+    out("NameSeg: ");
+    for(auto i=0;i<4;i++) out("{:c}",data.at(pos+i));
+    outln("");
+  } else {
+    return false;
+  }
+  return true;
+}
+
+void nameit(Vector<u8>& data,u32& pos)
+{
+  /*
+  out("Name: ");
+  for(auto i=-2;i<0;i++) out("{:#02x} ",data.at(pos+i));
+  out("  ");
+  for(auto i=0;i<10;i++) out("{:#02x} ",data.at(pos+i));
+  outln("");
+  */
+  switch (data[pos]) {
+  case 0x5c:  // <rootchar namepath>
+    NamePath(data,pos+1);
+    break;
+  case 0x5e:  // <prefixpath namepath>
+    NamePath(data,pos+1);
+    break;
+  default: 
+    if (!NamePath(data,pos))
+      outln("strange character @ {}",pos);
+
+    break;
+  }
+}
+
 ErrorOr<int> serenity_main(Main::Arguments arguments)
 {
     TRY(Core::System::pledge("stdio rpath"));
@@ -92,6 +158,7 @@ ErrorOr<int> serenity_main(Main::Arguments arguments)
     }
 
     SDTHeader const* const header = reinterpret_cast<SDTHeader*>(header_buffer.data());
+    outln("data size: {}\n",header->length);
 
     auto data = TRY(dsdt_file->read_until_eof());
 
