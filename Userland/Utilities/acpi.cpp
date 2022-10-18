@@ -23,9 +23,19 @@ struct [[gnu::packed]] SDTHeader {
     u32 creator_revision;
 };
 
+constexpr u8 AliasOp = 0x06;
+constexpr u8 NameOp  = 0x08;
+constexpr u8 ScopeOp = 0x10;
+constexpr u8 MethodOp = 0x14;
+//constexpr u8 ScopeOp = 0x10;
+//constexpr u8 ScopeOp = 0x10;
+//constexpr u8 ScopeOp = 0x10;
+
+constexpr u8 ExtOpPrefix = 0x5b;
+
 bool isLeadNameChar(u8 data);
-bool NamePath(Vector<u8>& data,u32 pos);
-void nameit(Vector<u8>& data,u32& pos);
+bool NamePath(const Vector<u8>& data,u32& pos);
+void NameString(const Vector<u8>& data,u32& pos);
 
 // https://uefi.org/sites/default/files/resources/ACPI_Spec_6_4_Jan22.pdf#page=1020
 static void pkg_length(AK::Detail::ByteBuffer<32> const& data, u32& next_in_block, u32& next_block)
@@ -78,7 +88,7 @@ bool isLeadNameChar(u8 data)
   return ((data >= 0x41 && data <= 0x5a) || (data==0x5f));
 }
 
-bool NamePath(Vector<u8>& data,u32 pos)
+bool NamePath(const Vector<u8>& data,u32& pos)
 {
   const u8 DualNamePrefix=0x2e;
   const u8 MultiNamePrefix=0x2f;
@@ -92,26 +102,31 @@ bool NamePath(Vector<u8>& data,u32 pos)
     out("  Name 2: ");
     for(auto i=4;i<8;i++) out("{:c}",data.at(pos+1+i));
     outln();
+    pos+=1+8;
   } if (data[pos]==MultiNamePrefix) {
     outln("MultiNamePrefix");
-    for (auto mnp=0; mnp<data[pos+1]; mnp++) {
+    const auto num_names=data[pos+1];
+    for (auto mnp=0; mnp<num_names; mnp++) {
       out("  Name {:03d}: ",mnp);
       for(auto i=0;i<4;i++) out("{:c}",data.at(pos+2+4*mnp+1));
       outln();
-    }      
+    }
+    pos+=2+4*num_names+1;
   } if (data[pos]==NullName) {
     outln("NullName");
+    pos+=1;
   } if (isLeadNameChar(data[pos])) {
     out("NameSeg: ");
     for(auto i=0;i<4;i++) out("{:c}",data.at(pos+i));
     outln("");
+    pos+=4;
   } else {
     return false;
   }
   return true;
 }
 
-void nameit(Vector<u8>& data,u32& pos)
+void NameString(const Vector<u8>& data,u32& pos)
 {
   /*
   out("Name: ");
@@ -122,10 +137,12 @@ void nameit(Vector<u8>& data,u32& pos)
   */
   switch (data[pos]) {
   case 0x5c:  // <rootchar namepath>
-    NamePath(data,pos+1);
+    pos+=1;
+    NamePath(data,pos);
     break;
   case 0x5e:  // <prefixpath namepath>
-    NamePath(data,pos+1);
+    pos+=1;
+    NamePath(data,pos);
     break;
   default: 
     if (!NamePath(data,pos))
@@ -171,14 +188,45 @@ ErrorOr<int> serenity_main(Main::Arguments arguments)
     u32 next_block = 0;
 
     while (next_block < data.size()) {
-        switch (data[next_block]) {
-        case 0x10: // ScopeOp
-            pkg_length(data, next_in_block, next_block);
-            break;
-        default:
-            outln("Unknown Opcode: {:#02x}", data[next_block]);
-            return EXIT_FAILURE;
-        }
+      switch (data[next_block]) {
+      case AliasOp: // 0x06
+	outln("AliasOp");
+	NameString(data,next_in_block);
+	NameString(data,next_in_block);
+	break;
+      case NameOp: // 0x08
+	outln("NameOp");
+	NameString(data,next_in_block);
+	break;
+      case MethodOp: // 0x14
+	outln("MethodOp");
+	pkg_length(data, next_in_block, next_block);
+	NameString(data,next_in_block);
+	break;
+      case ScopeOp: // 0x10
+	outln("ScopeOp");
+	pkg_length(data, next_in_block, next_block);
+	NameString(data, next_in_block);
+	break;
+      case ExtOpPrefix: // 0x5b
+	outln("ExtOpPrefix");
+	switch (data[next_block+1]) {
+	default:
+	  outln("Unhandled ExtOp: {:#02x}",data[next_block+1]);
+	  break;
+	}
+	break;
+      default:
+	outln("Unknown Opcode: {:#02x}",data[next_block]);
+
+	out("around: ");
+	for(auto i=-2;i<0;i++) out("{:#02x} ",data.at(next_block+i));
+	out("  ");
+	for(auto i=0;i<10;i++) out("{:#02x} ",data.at(next_block+i));
+	outln("");
+
+	return EXIT_FAILURE;
+      }
     }
     return EXIT_SUCCESS;
 }
