@@ -23,13 +23,19 @@ struct [[gnu::packed]] SDTHeader {
     u32 creator_revision;
 };
 
-constexpr u8 AliasOp = 0x06;
-constexpr u8 NameOp  = 0x08;
-constexpr u8 ScopeOp = 0x10;
-constexpr u8 MethodOp = 0x14;
-//constexpr u8 ScopeOp = 0x10;
-//constexpr u8 ScopeOp = 0x10;
-//constexpr u8 ScopeOp = 0x10;
+constexpr u8 AliasOp      = 0x06;
+constexpr u8 NameOp       = 0x08;
+constexpr u8 ScopeOp      = 0x10;
+constexpr u8 MethodOp     = 0x14;
+constexpr u8 IfOp         = 0xa0;
+constexpr u8 WhileOp      = 0xa2;
+constexpr u8 BufferOp     = 0x11;
+constexpr u8 PackageOp    = 0x12;
+constexpr u8 VarPackageOp = 0x13;
+//constexpr u8 ScopeOp    = 0x10;
+//constexpr u8 ScopeOp    = 0x10;
+//constexpr u8 ScopeOp    = 0x10;
+//constexpr u8 ScopeOp    = 0x10;
 
 constexpr u8 ExtOpPrefix = 0x5b;
 
@@ -189,6 +195,7 @@ ErrorOr<int> serenity_main(Main::Arguments arguments)
 
     while (next_block < data.size()) {
       switch (data[next_block]) {
+      // Namespace modifier objects
       case AliasOp: // 0x06
 	outln("AliasOp");
 	NameString(data,next_in_block);
@@ -198,15 +205,17 @@ ErrorOr<int> serenity_main(Main::Arguments arguments)
 	outln("NameOp");
 	NameString(data,next_in_block);
 	break;
-      case MethodOp: // 0x14
-	outln("MethodOp");
-	pkg_length(data, next_in_block, next_block);
-	NameString(data,next_in_block);
-	break;
       case ScopeOp: // 0x10
 	outln("ScopeOp");
 	pkg_length(data, next_in_block, next_block);
 	NameString(data, next_in_block);
+	// fixme: implement rest
+	break;
+      // Named objects
+      case MethodOp: // 0x14
+	outln("MethodOp");
+	pkgLength(data,next_in_block,next_block);
+	NameString(data,next_in_block);
 	break;
       case ExtOpPrefix: // 0x5b
 	outln("ExtOpPrefix");
@@ -216,6 +225,40 @@ ErrorOr<int> serenity_main(Main::Arguments arguments)
 	  break;
 	}
 	break;
+
+      // Statement Opcodes
+      case IfOp: // 0xa0
+	outln("IfOp");
+	pkgLength(data,next_in_block,next_block);
+	// fixme: implement rest
+	break;
+      case WhileOp: // 0xa2
+	outln("WhileOp");
+	pkgLength(data,next_in_block,next_block);
+	// fixme: implement rest
+	break;
+
+      // Expression Opcodes
+      case BufferOp: // 0x11
+	outln("BufferOp");
+	pkgLength(data,next_in_block,next_block);
+	// fixme: implement rest
+	break;
+      case PackageOp: // 0x12
+	outln("PackageOp");
+	pkgLength(data,next_in_block,next_block);
+	// fixme: implement rest
+	break;
+      case VarPackageOp: // 0x13
+	outln("VarPackageOp");
+	pkgLength(data,next_in_block,next_block);
+	// fixme: implement rest
+	break;
+
+      // Arg Objects
+      // Local Objects
+      // Debug Objects
+
       default:
 	outln("Unknown Opcode: {:#02x}",data[next_block]);
 
