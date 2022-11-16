@@ -39,10 +39,6 @@ constexpr u8 VarPackageOp = 0x13;
 
 constexpr u8 ExtOpPrefix = 0x5b;
 
-bool isLeadNameChar(u8 data);
-bool NamePath(const Vector<u8>& data,u32& pos);
-void NameString(const Vector<u8>& data,u32& pos);
-
 // https://uefi.org/sites/default/files/resources/ACPI_Spec_6_4_Jan22.pdf#page=1020
 static void pkg_length(AK::Detail::ByteBuffer<32> const& data, u32& next_in_block, u32& next_block)
 {
@@ -89,12 +85,12 @@ static void pkg_length(AK::Detail::ByteBuffer<32> const& data, u32& next_in_bloc
     next_block = next_block + delta + length;
 }
 
-bool isLeadNameChar(u8 data)
+static bool isLeadNameChar(u8 data)
 {
   return ((data >= 0x41 && data <= 0x5a) || (data==0x5f));
 }
 
-bool NamePath(const Vector<u8>& data,u32& pos)
+static bool NamePath(AK::Detail::ByteBuffer<32> const& data,u32& pos)
 {
   const u8 DualNamePrefix=0x2e;
   const u8 MultiNamePrefix=0x2f;
@@ -103,10 +99,10 @@ bool NamePath(const Vector<u8>& data,u32& pos)
   if (data[pos]==DualNamePrefix) {
     outln("DualNamePrefix");
     out("  Name 1: ");
-    for(auto i=0;i<4;i++) out("{:c}",data.at(pos+1+i));
+    for(auto i=0;i<4;i++) out("{:c}",data[pos+1+i]);
     outln();
     out("  Name 2: ");
-    for(auto i=4;i<8;i++) out("{:c}",data.at(pos+1+i));
+    for(auto i=4;i<8;i++) out("{:c}",data[pos+1+i]);
     outln();
     pos+=1+8;
   } if (data[pos]==MultiNamePrefix) {
@@ -114,7 +110,7 @@ bool NamePath(const Vector<u8>& data,u32& pos)
     const auto num_names=data[pos+1];
     for (auto mnp=0; mnp<num_names; mnp++) {
       out("  Name {:03d}: ",mnp);
-      for(auto i=0;i<4;i++) out("{:c}",data.at(pos+2+4*mnp+1));
+      for(auto i=0;i<4;i++) out("{:c}",data[pos+2+4*mnp+1]);
       outln();
     }
     pos+=2+4*num_names+1;
@@ -123,7 +119,7 @@ bool NamePath(const Vector<u8>& data,u32& pos)
     pos+=1;
   } if (isLeadNameChar(data[pos])) {
     out("NameSeg: ");
-    for(auto i=0;i<4;i++) out("{:c}",data.at(pos+i));
+    for(auto i=0;i<4;i++) out("{:c}",data[pos+i]);
     outln("");
     pos+=4;
   } else {
@@ -132,7 +128,7 @@ bool NamePath(const Vector<u8>& data,u32& pos)
   return true;
 }
 
-void NameString(const Vector<u8>& data,u32& pos)
+static void NameString(AK::Detail::ByteBuffer<32> const& data,u32& pos)
 {
   /*
   out("Name: ");
@@ -214,7 +210,7 @@ ErrorOr<int> serenity_main(Main::Arguments arguments)
       // Named objects
       case MethodOp: // 0x14
 	outln("MethodOp");
-	pkgLength(data,next_in_block,next_block);
+	pkg_length(data,next_in_block,next_block);
 	NameString(data,next_in_block);
 	break;
       case ExtOpPrefix: // 0x5b
@@ -229,29 +225,29 @@ ErrorOr<int> serenity_main(Main::Arguments arguments)
       // Statement Opcodes
       case IfOp: // 0xa0
 	outln("IfOp");
-	pkgLength(data,next_in_block,next_block);
+	pkg_length(data,next_in_block,next_block);
 	// fixme: implement rest
 	break;
       case WhileOp: // 0xa2
 	outln("WhileOp");
-	pkgLength(data,next_in_block,next_block);
+	pkg_length(data,next_in_block,next_block);
 	// fixme: implement rest
 	break;
 
       // Expression Opcodes
       case BufferOp: // 0x11
 	outln("BufferOp");
-	pkgLength(data,next_in_block,next_block);
+	pkg_length(data,next_in_block,next_block);
 	// fixme: implement rest
 	break;
       case PackageOp: // 0x12
 	outln("PackageOp");
-	pkgLength(data,next_in_block,next_block);
+	pkg_length(data,next_in_block,next_block);
 	// fixme: implement rest
 	break;
       case VarPackageOp: // 0x13
 	outln("VarPackageOp");
-	pkgLength(data,next_in_block,next_block);
+	pkg_length(data,next_in_block,next_block);
 	// fixme: implement rest
 	break;
 
@@ -263,9 +259,9 @@ ErrorOr<int> serenity_main(Main::Arguments arguments)
 	outln("Unknown Opcode: {:#02x}",data[next_block]);
 
 	out("around: ");
-	for(auto i=-2;i<0;i++) out("{:#02x} ",data.at(next_block+i));
+	for(auto i=-2;i<0;i++) out("{:#02x} ",data[next_block+i]);
 	out("  ");
-	for(auto i=0;i<10;i++) out("{:#02x} ",data.at(next_block+i));
+	for(auto i=0;i<10;i++) out("{:#02x} ",data[next_block+i]);
 	outln("");
 
 	return EXIT_FAILURE;
